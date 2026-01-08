@@ -12,3 +12,6 @@ wheels/
 # Data and Cache
 data/
 cache/
+
+# IDEs
+.vscode
