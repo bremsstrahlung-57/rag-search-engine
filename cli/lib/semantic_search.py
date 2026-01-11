@@ -56,15 +56,26 @@ def normal_chunking(text, chunk_size, overlap):
 
 
 def semantic_chunking(text, max_chunk_size, overlap):
-    sentences = re.split(r"(?<=[.!?])\s+", text)
-    chunks = []
-    step = max_chunk_size - overlap
-    i = 0
+    text_strip = text.strip()
+    if text_strip == "":
+        return []
 
-    while i + max_chunk_size <= len(sentences):
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    if len(sentences) == 1 and not sentences[0].endswith(("?", ".", "!")):
+        words = text_strip.split()
+        sentences = words
+
+    if len(sentences) <= max_chunk_size:
+        return [" ".join(sentences)] if sentences else []
+
+    chunks = []
+    step = max(1, max_chunk_size - overlap)
+
+    for i in range(0, len(sentences), step):
         chunk = " ".join(sentences[i : i + max_chunk_size])
-        chunks.append(chunk)
-        i += step
+        chunk = chunk.strip()
+        if chunk:
+            chunks.append(chunk)
 
     return chunks
 
@@ -197,15 +208,14 @@ class ChunkedSemanticSearch(SemanticSearch):
     def load_or_create_chunk_embeddings(self, documents: list[dict]) -> np.ndarray:
         self.documents = documents
         self.document_map = {i: doc for i, doc in enumerate(documents)}
-
         if os.path.exists(self.chunk_embeddings_npy) and os.path.exists(
             self.chunk_metadata_json
         ):
             self.chunk_embeddings = np.load(self.chunk_embeddings_npy)
             with open(self.chunk_metadata_json, "r") as f:
                 self.chunk_metadata = json.load(f)
-
-        return self.chunk_embeddings
+            return self.chunk_embeddings
+        return self.build_chunk_embeddings(documents)
 
     def search_chunks(self, query: str, limit: int = 10):
         text = self.generate_embedding(query)
