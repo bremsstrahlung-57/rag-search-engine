@@ -1,6 +1,7 @@
 import argparse
 
 from lib.hybrid_search import HybridSearch, normalize
+from lib.llm_query import llm_query_enhance
 from lib.semantic_search import load_movies
 
 
@@ -48,6 +49,12 @@ def main() -> None:
         default=5,
         help="Limit",
     )
+    rrf_search_parser.add_argument(
+        "--enhance",
+        type=str,
+        choices=["spell", "rewrite", "expand"],
+        help="Query enhancement method",
+    )
 
     args = parser.parse_args()
 
@@ -75,7 +82,9 @@ def main() -> None:
                 )
 
         case "rrf_search":
-            res = hyb.rrf_search(args.query, args.k, args.limit)
+            query = llm_query_enhance(args.query, args.enhance)
+            res = hyb.rrf_search(query, args.k, args.limit)
+
             for i, item in enumerate(res, start=1):
                 rrf_score = item.get("rrf_score")
                 rrf_rank = item.get("rrf_rank")

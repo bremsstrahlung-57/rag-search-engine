@@ -5,9 +5,11 @@ build/
 dist/
 wheels/
 *.egg-info
+test_gemini.py
 
 # Virtual environments
 .venv
+.env
 
 # Data and Cache
 data/

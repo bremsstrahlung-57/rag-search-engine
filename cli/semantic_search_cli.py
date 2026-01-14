@@ -31,7 +31,7 @@ def main():
     )
     search_parser.add_argument("query", type=str, help="Query to search for")
     search_parser.add_argument(
-        "limit",
+        "--limit",
         type=int,
         nargs="?",
         default=5,
@@ -43,14 +43,14 @@ def main():
     )
     chunk_parser.add_argument("text", type=str, help="Text to chunk")
     chunk_parser.add_argument(
-        "chunk_size",
+        "--chunk_size",
         type=int,
         nargs="?",
         default=200,
         help="Size of chunk (default=200)",
     )
     chunk_parser.add_argument(
-        "overlap",
+        "--overlap",
         type=int,
         nargs="?",
         default=0,
@@ -62,14 +62,14 @@ def main():
     )
     semantic_chunk_parser.add_argument("text", type=str, help="Text to chunk")
     semantic_chunk_parser.add_argument(
-        "max_chunk_size",
+        "--max_chunk_size",
         type=int,
         nargs="?",
         default=4,
         help="Size of chunk (default=4)",
     )
     semantic_chunk_parser.add_argument(
-        "overlap",
+        "--overlap",
         type=int,
         nargs="?",
         default=0,
@@ -83,7 +83,7 @@ def main():
     )
     search_chunked_parser.add_argument("query", type=str, help="Query to search")
     search_chunked_parser.add_argument(
-        "limit",
+        "--limit",
         type=int,
         nargs="?",
         default=5,
