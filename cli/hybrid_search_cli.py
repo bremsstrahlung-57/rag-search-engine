@@ -109,6 +109,10 @@ def main() -> None:
                 )
 
         case "rrf_search":
+            if args.rerank_method:
+                print("Reranking top 3 results using individual method...")
+            print(f"Reciprocal Rank Fusion Results for '{args.query}' (k={args.k}):\n")
+
             query = llm_query_enhance(args.query, args.enhance)
             limit = 5 * args.limit if args.rerank_method else args.limit
             res = hyb.rrf_search(query, args.k, limit, args.rerank_method)
@@ -132,6 +136,7 @@ def main() -> None:
                     key=lambda x: x["llm_score"],
                     reverse=True,
                 )
+
                 print_results(reranked)
             else:
                 print_results(res)
