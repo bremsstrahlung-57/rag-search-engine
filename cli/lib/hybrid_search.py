@@ -87,7 +87,7 @@ class HybridSearch:
         scores.sort(key=lambda item: item["hybrid_score"], reverse=True)
         return scores[:limit]
 
-    def rrf_search(self, query, k, limit=10, x=500):
+    def rrf_search(self, query, k, limit=10, rerank_method=None, x=500):
         bm25_result = self._bm25_search(query, limit * x)
         semantic_result = self.semantic_search.search_chunks(query, limit * x)
 
@@ -124,9 +124,11 @@ class HybridSearch:
             results[doc_id]["bm_rank"] = rank
             results[doc_id]["rrf_score"] += score
 
-        fused = sorted(results.values(), key=lambda x: x["rrf_score"], reverse=True)
+        fused = sorted(results.values(), key=lambda x: x["rrf_score"], reverse=True)[
+            :limit
+        ]
 
         for rank, item in enumerate(fused, start=1):
             item["rrf_rank"] = rank
 
-        return fused[:limit]
+        return fused

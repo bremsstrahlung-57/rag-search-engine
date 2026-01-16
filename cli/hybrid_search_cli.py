@@ -1,8 +1,30 @@
 import argparse
+from time import sleep
 
 from lib.hybrid_search import HybridSearch, normalize
-from lib.llm_query import llm_query_enhance
+from lib.llm_query import groq_reranking, llm_query_enhance
 from lib.semantic_search import load_movies
+
+
+def print_results(res):
+    for i, item in enumerate(res, start=1):
+        llm_score = item.get("llm_score", None)
+        rrf_score = item.get("rrf_score")
+        rrf_rank = item.get("rrf_rank")
+        bm25_rank = item.get("bm_rank")
+        sem_rank = item.get("sem_rank")
+        title = item.get("doc", {}).get("title")
+        desc = item.get("doc", {}).get("document") + "..."
+
+        print(f"{i}. {title}")
+        if llm_score is not None:
+            print(f"Rerank Score: {llm_score}/10")
+        else:
+            pass
+        print(f"RRF Rank: {rrf_rank}, RRF Score: {rrf_score:.4f}")
+        print(f"BM25 Rank: {bm25_rank}, Semantic Rank: {sem_rank}")
+        print(f"{desc}")
+        print()
 
 
 def main() -> None:
@@ -55,6 +77,12 @@ def main() -> None:
         choices=["spell", "rewrite", "expand"],
         help="Query enhancement method",
     )
+    rrf_search_parser.add_argument(
+        "--rerank-method",
+        type=str,
+        choices=["individual"],
+        help="LLM-based re-ranking",
+    )
 
     args = parser.parse_args()
 
@@ -71,7 +99,6 @@ def main() -> None:
             res = hyb.weighted_search(args.query, args.alpha, args.limit)
 
             for i, mov in enumerate(res, start=1):
-                # doc_id = mov.get("id")
                 title = mov.get("doc").get("title")
                 desc = mov.get("doc").get("description")
                 bm25_score = mov.get("bm25_score")
@@ -83,25 +110,31 @@ def main() -> None:
 
         case "rrf_search":
             query = llm_query_enhance(args.query, args.enhance)
-            res = hyb.rrf_search(query, args.k, args.limit)
+            limit = 5 * args.limit if args.rerank_method else args.limit
+            res = hyb.rrf_search(query, args.k, limit, args.rerank_method)
 
-            for i, item in enumerate(res, start=1):
-                rrf_score = item.get("rrf_score")
-                rrf_rank = item.get("rrf_rank")
-                bm25_rank = item.get("bm_rank")
-                sem_rank = item.get("sem_rank")
-                title = item.get("doc", {}).get("title")
-                desc = ""
-                if sem_rank is None:
-                    desc = item.get("doc", {}).get("description")[:100] + "..."
-                else:
-                    desc = item.get("doc", {}).get("document")
+            if args.rerank_method == "individual":
+                temp = res[:3]
+                for i, item in enumerate(temp):
+                    llm_score = groq_reranking(
+                        query,
+                        item.get("doc", {}).get("title"),
+                        item.get("doc", {}).get("document") + "...",
+                        item.get("rrf_rank"),
+                        item.get("sem_rank"),
+                        item.get("bm_rank"),
+                    )
+                    item["llm_score"] = llm_score
+                    sleep(3)
 
-                print(f"{i}. {title}")
-                print(f"RRF Rank: {rrf_rank}, RRF Score: {rrf_score:.4f}")
-                print(f"BM25 Rank: {bm25_rank}, Semantic Rank: {sem_rank}")
-                print(f"{desc}")
-                print()
+                reranked = sorted(
+                    temp,
+                    key=lambda x: x["llm_score"],
+                    reverse=True,
+                )
+                print_results(reranked)
+            else:
+                print_results(res)
 
         case _:
             parser.print_help()
