@@ -116,7 +116,6 @@ def llm_reranking(query, title, desc):
 
 
 def groq_reranking(query, title, desc, rrf_rank, sem_rank, bm_rank):
-    # print(query, title, desc, rrf_rank, sem_rank, bm_rank)
     response = groq_client.chat.completions.create(
         model=groq_model,
         messages=[
@@ -161,3 +160,22 @@ def groq_reranking(query, title, desc, rrf_rank, sem_rank, bm_rank):
     score = int(text) if text.isdigit() and 0 <= int(text) <= 10 else 0
 
     return score
+
+
+def batch_reranking(query, doc_list_str):
+    response = client.models.generate_content(
+        model=model,
+        contents=f"""Rank these movies by relevance to the search query.
+
+        Query: "{query}"
+
+        Movies:
+        {doc_list_str}
+
+        Return ONLY the IDs in order of relevance (best match first). Return a valid JSON list, nothing else. For example:
+
+        [75, 12, 34, 2, 1]
+        """,
+    )
+
+    return response.text

@@ -1,14 +1,18 @@
 import argparse
+import json
 from time import sleep
 
 from lib.hybrid_search import HybridSearch, normalize
-from lib.llm_query import groq_reranking, llm_query_enhance
+from lib.reranking import batch_reranking, groq_reranking, llm_query_enhance
 from lib.semantic_search import load_movies
+from sentence_transformers import CrossEncoder
 
 
 def print_results(res):
     for i, item in enumerate(res, start=1):
         llm_score = item.get("llm_score", None)
+        llm_rerank = item.get("llm_rerank", None)
+        cross_encoder_score = item.get("cross_encoder_score", None)
         rrf_score = item.get("rrf_score")
         rrf_rank = item.get("rrf_rank")
         bm25_rank = item.get("bm_rank")
@@ -19,9 +23,13 @@ def print_results(res):
         print(f"{i}. {title}")
         if llm_score is not None:
             print(f"Rerank Score: {llm_score}/10")
+        elif llm_rerank is not None:
+            print(f"Rerank Rank: {llm_rerank}")
+        elif cross_encoder_score is not None:
+            print(f"Cross Encoder Score: {cross_encoder_score:.4f}")
         else:
-            pass
-        print(f"RRF Rank: {rrf_rank}, RRF Score: {rrf_score:.4f}")
+            print(f"RRF Rank: {rrf_rank}")
+        print(f"RRF Score: {rrf_score:.4f}")
         print(f"BM25 Rank: {bm25_rank}, Semantic Rank: {sem_rank}")
         print(f"{desc}")
         print()
@@ -80,7 +88,7 @@ def main() -> None:
     rrf_search_parser.add_argument(
         "--rerank-method",
         type=str,
-        choices=["individual"],
+        choices=["individual", "batch", "cross_encoder"],
         help="LLM-based re-ranking",
     )
 
@@ -110,15 +118,17 @@ def main() -> None:
 
         case "rrf_search":
             if args.rerank_method:
-                print("Reranking top 3 results using individual method...")
-            print(f"Reciprocal Rank Fusion Results for '{args.query}' (k={args.k}):\n")
+                print(
+                    f"Reranking top {args.limit} results using {args.rerank_method} method...\n"
+                )
+            print(f"Reciprocal Rank Fusion Results for '{args.query}' (k={args.k}):")
 
             query = llm_query_enhance(args.query, args.enhance)
             limit = 5 * args.limit if args.rerank_method else args.limit
             res = hyb.rrf_search(query, args.k, limit, args.rerank_method)
 
             if args.rerank_method == "individual":
-                temp = res[:3]
+                temp = res[: args.limit]
                 for i, item in enumerate(temp):
                     llm_score = groq_reranking(
                         query,
@@ -138,6 +148,49 @@ def main() -> None:
                 )
 
                 print_results(reranked)
+            elif args.rerank_method == "batch":
+                temp = res[: args.limit]
+                batch_rank = batch_reranking(
+                    args.query,
+                    temp,
+                )
+                lst = json.loads(batch_rank)
+                ids_set = set(lst)
+                for rank, item in enumerate(temp, start=1):
+                    if item["id"] in ids_set:
+                        item["llm_rerank"] = rank
+
+                reranked = sorted(
+                    temp,
+                    key=lambda x: x["llm_rerank"],
+                )
+                print_results(reranked)
+
+            elif args.rerank_method == "cross_encoder":
+                cross_encoder = CrossEncoder("cross-encoder/ms-marco-TinyBERT-L2-v2")
+                pairs = []
+                for item in res:
+                    title = item.get("doc", {}).get("title", "")
+                    desc = item.get("doc", {}).get("document", "")
+                    pairs.append(
+                        [
+                            query,
+                            f"{title} - {desc}",
+                        ]
+                    )
+                scores = cross_encoder.predict(pairs)
+
+                for i, item in enumerate(res):
+                    item["cross_encoder_score"] = scores[i]
+
+                reranked = sorted(
+                    res,
+                    key=lambda x: x["cross_encoder_score"],
+                    reverse=True,
+                )
+
+                print_results(reranked[: args.limit])
+
             else:
                 print_results(res)
 
