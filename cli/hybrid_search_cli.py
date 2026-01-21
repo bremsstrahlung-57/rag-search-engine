@@ -1,11 +1,24 @@
 import argparse
+import ast
 import json
+import logging
 from time import sleep
 
 from lib.hybrid_search import HybridSearch, normalize
-from lib.reranking import batch_reranking, groq_reranking, llm_query_enhance
+from lib.reranking import (
+    batch_reranking,
+    evaluate_result,
+    groq_reranking,
+    llm_query_enhance,
+)
 from lib.semantic_search import load_movies
 from sentence_transformers import CrossEncoder
+
+logging.basicConfig(
+    filename="logs/cli.log",
+    level=logging.DEBUG,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
 
 
 def print_results(res):
@@ -63,7 +76,7 @@ def main() -> None:
         help="Limit",
     )
 
-    rrf_search_parser = subparsers.add_parser("rrf_search", help="RRF search")
+    rrf_search_parser = subparsers.add_parser("rrf-search", help="RRF search")
     rrf_search_parser.add_argument("query", type=str, help="Query")
     rrf_search_parser.add_argument(
         "--k",
@@ -91,6 +104,11 @@ def main() -> None:
         choices=["individual", "batch", "cross_encoder"],
         help="LLM-based re-ranking",
     )
+    rrf_search_parser.add_argument(
+        "--evaluate",
+        action="store_true",
+        help="LLM-based result evaluation",
+    )
 
     args = parser.parse_args()
 
@@ -116,16 +134,19 @@ def main() -> None:
                     f"{i}. {title}\nHybrid Score: {hybrid_score:.4f}\nBM25: {bm25_score:.4f}, Semantic: {semantic_score:.4f}\n{desc}\n"
                 )
 
-        case "rrf_search":
+        case "rrf-search":
             if args.rerank_method:
                 print(
                     f"Reranking top {args.limit} results using {args.rerank_method} method...\n"
                 )
             print(f"Reciprocal Rank Fusion Results for '{args.query}' (k={args.k}):")
 
+            logging.info(f"Original Query: {args.query}")
             query = llm_query_enhance(args.query, args.enhance)
+            logging.info(f"Enhanced Query: {query}")
+
             limit = 5 * args.limit if args.rerank_method else args.limit
-            res = hyb.rrf_search(query, args.k, limit, args.rerank_method)
+            res = hyb.rrf_search(query, args.k, limit)
 
             if args.rerank_method == "individual":
                 temp = res[: args.limit]
@@ -146,8 +167,9 @@ def main() -> None:
                     key=lambda x: x["llm_score"],
                     reverse=True,
                 )
-
+                logging.info(f"Final Result: {reranked}")
                 print_results(reranked)
+
             elif args.rerank_method == "batch":
                 temp = res[: args.limit]
                 batch_rank = batch_reranking(
@@ -164,6 +186,7 @@ def main() -> None:
                     temp,
                     key=lambda x: x["llm_rerank"],
                 )
+                logging.info(f"Final Result: {reranked}")
                 print_results(reranked)
 
             elif args.rerank_method == "cross_encoder":
@@ -188,11 +211,25 @@ def main() -> None:
                     key=lambda x: x["cross_encoder_score"],
                     reverse=True,
                 )
-
+                logging.info(f"Final Result: {reranked}")
                 print_results(reranked[: args.limit])
 
             else:
                 print_results(res)
+
+            if args.evaluate:
+                eval = evaluate_result(args.query, res)
+                eval_list = ast.literal_eval(eval)
+                for item, ev in zip(res, eval_list):
+                    item["eval"] = ev
+                evaluated_res = sorted(
+                    res,
+                    key=lambda item: item["eval"],
+                    reverse=True,
+                )
+                print("Evaluated Scores:")
+                for i, item in enumerate(evaluated_res, start=1):
+                    print(f"{i}. {item.get('doc', {}).get('title')}: {item['eval']}/3")
 
         case _:
             parser.print_help()

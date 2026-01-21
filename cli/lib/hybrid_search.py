@@ -1,7 +1,14 @@
+import logging
 import os
 
 from .keyword_search import InvertedIndex
 from .semantic_search import ChunkedSemanticSearch
+
+logging.basicConfig(
+    filename="logs/cli.log",
+    level=logging.DEBUG,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
 
 
 def normalize(scores: list[float | int]):
@@ -87,7 +94,7 @@ class HybridSearch:
         scores.sort(key=lambda item: item["hybrid_score"], reverse=True)
         return scores[:limit]
 
-    def rrf_search(self, query, k, limit=10, rerank_method=None, x=500):
+    def rrf_search(self, query, k, limit=10, x=500):
         bm25_result = self._bm25_search(query, limit * x)
         semantic_result = self.semantic_search.search_chunks(query, limit * x)
 
@@ -131,4 +138,5 @@ class HybridSearch:
         for rank, item in enumerate(fused, start=1):
             item["rrf_rank"] = rank
 
+        logging.info(f"RRF Search Result: {fused}")
         return fused
