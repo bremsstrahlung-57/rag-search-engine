@@ -1,7 +1,6 @@
 import json
 
 from lib.hybrid_search import HybridSearch
-from lib.reranking import evaluate_result
 from lib.semantic_search import load_movies
 
 documents = load_movies()

@@ -5,7 +5,7 @@ import logging
 from time import sleep
 
 from lib.hybrid_search import HybridSearch, normalize
-from lib.reranking import (
+from lib.llm_funcs import (
     batch_reranking,
     evaluate_result,
     groq_reranking,
